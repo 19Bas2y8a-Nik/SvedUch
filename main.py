@@ -16,9 +16,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout()
         central_widget.setLayout(layout)
         
-        # Добавляем метку
-        label = QLabel("Добро пожаловать в SvedUch!")
-        layout.addWidget(label)
+        # Добавляем метку (сохраняем ссылку для изменения текста)
+        self.label = QLabel("Добро пожаловать в SvedUch!")
+        layout.addWidget(self.label)
         
         # Добавляем кнопку
         button = QPushButton("Нажми меня")
@@ -26,7 +26,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(button)
     
     def on_button_clicked(self):
-        print("Кнопка нажата!")
+        self.label.setText("Кнопка нажата!")
 
 
 def main():
