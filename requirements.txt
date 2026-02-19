@@ -1,3 +1,4 @@
 # SvedUch — Python 3.11+
 PyQt5>=5.15.10
 openpyxl>=3.1.0
+Pillow>=10.0.0

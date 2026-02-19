@@ -2,12 +2,14 @@
 Окно «Перевод»: перевод ученика (в другую школу / другой класс) и перевод класса (этап 6).
 """
 import re
+import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QLabel, QLineEdit, QComboBox, QGroupBox, QRadioButton, QButtonGroup,
     QMessageBox, QHeaderView, QAbstractItemView, QCheckBox,
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 
 from db import Database
 from date_widget import DateLineEdit
@@ -45,6 +47,10 @@ class TransferWindow(QWidget):
         super().__init__(parent)
         self.db = db
         self.setWindowTitle("Перевод")
+        # Установка иконки
+        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         self._pupil_rows = []   # результат поиска учеников (блок 1)
         self._class_pupil_rows = []  # ученики выбранного класса (блок 2)
         self._form_map = {}  # id -> number

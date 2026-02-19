@@ -1,12 +1,14 @@
 """
 Окно «Таблицы» и диалоги для работы с таблицами БД (этап 3).
 """
+import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QMessageBox, QHeaderView,
     QLabel, QAbstractItemView, QTabWidget,
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 
 from db import Database
 from pupil_form import PupilEntryTab, EditPupilTab
@@ -18,6 +20,10 @@ class TablesWindow(QWidget):
         super().__init__(parent)
         self.db = db
         self.setWindowTitle("Таблицы")
+        # Установка иконки
+        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("Выберите таблицу для просмотра и редактирования:"))
         btn_layout = QVBoxLayout()
@@ -355,6 +361,10 @@ class PupilsWindow(QWidget):
         super().__init__(parent)
         self.db = db
         self.setWindowTitle("Ученики")
+        # Установка иконки
+        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
         self.list_tab = PupilsTableDialog(self.db, self, pupils_window=self)

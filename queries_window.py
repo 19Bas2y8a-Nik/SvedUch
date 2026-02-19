@@ -2,12 +2,14 @@
 Окно «Выборки»: фильтры по классу/программе, список учеников или агрегация по программе,
 выбор полей, экспорт в Excel (этап 5).
 """
+import os
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QLabel, QComboBox, QGroupBox, QRadioButton, QButtonGroup, QFileDialog,
     QMessageBox, QHeaderView, QScrollArea,     QCheckBox,
 )
 from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QIcon
 
 from db import Database
 
@@ -38,6 +40,10 @@ class QueriesWindow(QWidget):
         super().__init__(parent)
         self.db = db
         self.setWindowTitle("Выборки")
+        # Установка иконки
+        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         self._rows_list = []   # текущие строки (список dict/Row) для экспорта
         self._mode_count = False  # True = режим «Количество по программе»
         self._result_is_aggregate = False  # True = в таблице общая статистика (программа «все»)
