@@ -498,6 +498,18 @@ class EditPupilTab(QWidget):
         self.form.load_from_row(pupil_row)
         self._update_temp_table()
 
+    def load_pupil_by_id(self, pupil_id: int):
+        """Загрузить ученика по id из БД в форму (для перехода из списка учеников)."""
+        row = self.db.pupils_get_by_id(pupil_id)
+        if not row:
+            return False
+        self._current_pupil_id = pupil_id
+        self._search_results = [row]
+        self.search_result_widget.setVisible(False)
+        self.form.load_from_row(row)
+        self._update_temp_table()
+        return True
+
     def _update_temp_table(self):
         """Обновить единственную строку временной таблицы из формы."""
         row = self.form.get_current_row()

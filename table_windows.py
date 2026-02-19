@@ -357,26 +357,69 @@ class PupilsWindow(QWidget):
         self.setWindowTitle("Ученики")
         layout = QVBoxLayout(self)
         self.tabs = QTabWidget()
-        self.tabs.addTab(PupilsTableDialog(self.db, self), "Список учеников")
+        self.list_tab = PupilsTableDialog(self.db, self, pupils_window=self)
+        self.tabs.addTab(self.list_tab, "Список учеников")
         self.tabs.addTab(PupilEntryTab(self.db, self), "Добавить ученика")
-        self.tabs.addTab(EditPupilTab(self.db, self), "Изменения по ученику")
+        self.edit_tab = EditPupilTab(self.db, self)
+        self.tabs.addTab(self.edit_tab, "Изменения по ученику")
         layout.addWidget(self.tabs)
         self.setMinimumSize(900, 500)
 
+    def switch_to_add_tab(self):
+        self.tabs.setCurrentIndex(1)
+
+    def switch_to_edit_tab_with_pupil_id(self, pupil_id: int) -> bool:
+        if self.edit_tab.load_pupil_by_id(pupil_id):
+            self.tabs.setCurrentIndex(2)
+            return True
+        return False
+
 
 class PupilsTableDialog(QWidget):
-    def __init__(self, db: Database, parent=None):
+    PAGE_SIZE = 50
+
+    def __init__(self, db: Database, parent=None, pupils_window=None):
         super().__init__(parent)
         self.db = db
+        self.pupils_window = pupils_window
+        self._all_rows = []
+        self._current_page = 0
         self.setWindowTitle("Ученики")
         layout = QVBoxLayout(self)
         self.table = QTableWidget()
         self._build_columns()
         layout.addWidget(self.table)
+
+        # Пагинация
+        page_layout = QHBoxLayout()
+        self.page_label = QLabel("Страница: 0 (0 из 0)")
+        page_layout.addWidget(self.page_label)
+        btn_prev = QPushButton("◄ Предыдущая")
+        btn_prev.clicked.connect(self._prev_page)
+        page_layout.addWidget(btn_prev)
+        btn_next = QPushButton("Следующая ►")
+        btn_next.clicked.connect(self._next_page)
+        page_layout.addWidget(btn_next)
+        page_layout.addStretch()
+        layout.addLayout(page_layout)
+
+        # CRUD и Обновить
+        crud_layout = QHBoxLayout()
+        btn_add = QPushButton("Добавить")
+        btn_add.clicked.connect(self._add)
+        crud_layout.addWidget(btn_add)
+        btn_edit = QPushButton("Изменить")
+        btn_edit.clicked.connect(self._edit)
+        crud_layout.addWidget(btn_edit)
+        btn_delete = QPushButton("Удалить")
+        btn_delete.clicked.connect(self._delete)
+        crud_layout.addWidget(btn_delete)
         refresh_btn = QPushButton("Обновить")
         refresh_btn.setToolTip("Обновить данные из базы (не сохраняет введённую информацию)")
         refresh_btn.clicked.connect(self._refresh)
-        layout.addWidget(refresh_btn)
+        crud_layout.addWidget(refresh_btn)
+        layout.addLayout(crud_layout)
+
         self._refresh()
 
     def _build_columns(self):
@@ -389,13 +432,26 @@ class PupilsTableDialog(QWidget):
         self.table.setHorizontalHeaderLabels(headers)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
 
     def _refresh(self):
         forms = {r["id"]: r["number"] for r in self.db.forms_get_all()}
         programs = {r["id"]: (r["name"], r["version"]) for r in self.db.programs_get_all()}
-        rows = self.db.pupils_get_all()
-        self.table.setRowCount(len(rows))
-        for i, r in enumerate(rows):
+        self._all_rows = list(self.db.pupils_get_all())
+        self._current_page = 0
+        self._fill_page(forms, programs)
+
+    def _fill_page(self, forms=None, programs=None):
+        if forms is None:
+            forms = {r["id"]: r["number"] for r in self.db.forms_get_all()}
+        if programs is None:
+            programs = {r["id"]: (r["name"], r["version"]) for r in self.db.programs_get_all()}
+        total = len(self._all_rows)
+        start = self._current_page * self.PAGE_SIZE
+        end = min(start + self.PAGE_SIZE, total)
+        page_rows = self._all_rows[start:end]
+        self.table.setRowCount(len(page_rows))
+        for i, r in enumerate(page_rows):
             form_num = forms.get(r["form_id"], str(r["form_id"]))
             prog = programs.get(r["program_id"], ("", ""))
             prog_name, prog_ver = prog[0], prog[1]
@@ -409,6 +465,66 @@ class PupilsTableDialog(QWidget):
             for j, val in enumerate(cells):
                 self.table.setItem(i, j, QTableWidgetItem(str(val)))
         self.table.resizeColumnsToContents()
+        self.page_label.setText(
+            f"Страница: {self._current_page + 1} "
+            f"(строки {start + 1}–{end} из {total})" if total else "Страница: 0 (0 из 0)"
+        )
+
+    def _prev_page(self):
+        if self._current_page > 0:
+            self._current_page -= 1
+            self._fill_page()
+
+    def _next_page(self):
+        total = len(self._all_rows)
+        if (self._current_page + 1) * self.PAGE_SIZE < total:
+            self._current_page += 1
+            self._fill_page()
+
+    def _add(self):
+        if self.pupils_window:
+            self.pupils_window.switch_to_add_tab()
+
+    def _edit(self):
+        row_idx = self.table.currentRow()
+        if row_idx < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для редактирования.")
+            return
+        id_item = self.table.item(row_idx, 0)
+        if not id_item:
+            return
+        try:
+            pupil_id = int(id_item.text())
+        except ValueError:
+            return
+        if self.pupils_window:
+            self.pupils_window.switch_to_edit_tab_with_pupil_id(pupil_id)
+
+    def _delete(self):
+        row_idx = self.table.currentRow()
+        if row_idx < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для удаления.")
+            return
+        id_item = self.table.item(row_idx, 0)
+        if not id_item:
+            return
+        try:
+            pupil_id = int(id_item.text())
+        except ValueError:
+            return
+        surname = self.table.item(row_idx, 2).text() if self.table.item(row_idx, 2) else ""
+        name = self.table.item(row_idx, 3).text() if self.table.item(row_idx, 3) else ""
+        if QMessageBox.question(
+            self, "Подтверждение", f"Удалить ученика {surname} {name}?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+        ) != QMessageBox.Yes:
+            return
+        try:
+            self.db.pupils_delete(pupil_id)
+            QMessageBox.information(self, "Успех", "Запись удалена.")
+            self._refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
 
 
 # --- Архив (просмотр) ---
