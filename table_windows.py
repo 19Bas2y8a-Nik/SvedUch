@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from db import Database
-from pupil_form import PupilEntryTab
+from pupil_form import PupilEntryTab, EditPupilTab
 
 
 class TablesWindow(QWidget):
@@ -359,6 +359,7 @@ class PupilsWindow(QWidget):
         self.tabs = QTabWidget()
         self.tabs.addTab(PupilsTableDialog(self.db, self), "Список учеников")
         self.tabs.addTab(PupilEntryTab(self.db, self), "Добавить ученика")
+        self.tabs.addTab(EditPupilTab(self.db, self), "Изменения по ученику")
         layout.addWidget(self.tabs)
         self.setMinimumSize(900, 500)
 

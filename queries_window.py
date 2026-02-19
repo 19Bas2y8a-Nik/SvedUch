@@ -40,6 +40,7 @@ class QueriesWindow(QWidget):
         self.setWindowTitle("Выборки")
         self._rows_list = []   # текущие строки (список dict/Row) для экспорта
         self._mode_count = False  # True = режим «Количество по программе»
+        self._result_is_aggregate = False  # True = в таблице общая статистика (программа «все»)
         self._form_map = {}
         self._program_map = {}
 
@@ -73,8 +74,8 @@ class QueriesWindow(QWidget):
         self.mode_group.addButton(self.radio_count)
         layout.addWidget(mode_grp)
 
-        # Выбор полей (для режима «Список учеников»)
-        fields_grp = QGroupBox("Отображаемые поля (для списка учеников)")
+        # Выбор полей (для списка учеников и для списка по выбранной программе)
+        fields_grp = QGroupBox("Отображаемые поля (для списка учеников и списка по программе)")
         fields_inner = QWidget()
         fields_layout = QHBoxLayout(fields_inner)
         fields_layout.setContentsMargins(0, 0, 0, 0)
@@ -137,12 +138,16 @@ class QueriesWindow(QWidget):
 
     def _run(self):
         self._mode_count = self.radio_count.isChecked()
-        if self._mode_count:
+        program_id = self.combo_program.currentData()
+        if self._mode_count and program_id is None:
             self._run_count_by_program()
+        elif self._mode_count and program_id is not None:
+            self._run_pupils_by_program(program_id)
         else:
             self._run_pupils_list()
 
     def _run_pupils_list(self):
+        self._result_is_aggregate = False
         form_id = self.combo_class.currentData()
         program_id = self.combo_program.currentData()
         if form_id is not None and program_id is not None:
@@ -157,7 +162,16 @@ class QueriesWindow(QWidget):
         self._rows_list = list(rows)
         self._fill_pupils_table()
 
+    def _run_pupils_by_program(self, program_id: int):
+        """Список учеников по выбранной программе с выбором полей."""
+        self._result_is_aggregate = False
+        rows = self.db.pupils_get_by_program_id(program_id)
+        self._rows_list = list(rows)
+        self._fill_pupils_table()
+
     def _run_count_by_program(self):
+        """Общая статистика: количество учеников по каждой программе (программа «— все —»)."""
+        self._result_is_aggregate = True
         rows = self.db.pupils_count_by_program()
         self._rows_list = list(rows)
         self.table.setColumnCount(4)
@@ -195,9 +209,13 @@ class QueriesWindow(QWidget):
         }
         return [data.get(key, "") for key, _ in PUPIL_COLUMNS]
 
+    def _get_selected_columns(self):
+        """Список выбранных полей: [(key, title), ...]. Пусто, если ничего не выбрано."""
+        return [(PUPIL_COLUMNS[i][0], PUPIL_COLUMNS[i][1]) for i in range(len(PUPIL_COLUMNS))
+                if self.field_checks[i].isChecked()]
+
     def _fill_pupils_table(self):
-        selected = [(PUPIL_COLUMNS[i][0], PUPIL_COLUMNS[i][1]) for i in range(len(PUPIL_COLUMNS))
-                    if self.field_checks[i].isChecked()]
+        selected = self._get_selected_columns()
         if not selected:
             QMessageBox.information(self, "Поля", "Выберите хотя бы одно поле для отображения.")
             return
@@ -231,21 +249,29 @@ class QueriesWindow(QWidget):
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Выборка"
-        if self._mode_count:
+        if self._result_is_aggregate:
             headers = ["Программа", "Версия", "Количество учеников"]
             ws.append(headers)
             for r in self._rows_list:
                 ws.append([r["program_name"] or "", r["program_version"] or "", r["pupils_count"]])
         else:
-            headers = [t for _, t in PUPIL_COLUMNS]
+            selected = self._get_selected_columns()
+            if not selected:
+                selected = [(k, t) for k, t in PUPIL_COLUMNS]
+            headers = [t for _, t in selected]
+            keys = [k for k, _ in selected]
             ws.append(headers)
+            cell_map_keys = [k for k, _ in PUPIL_COLUMNS]
             for r in self._rows_list:
                 cells = self._row_to_cells(r)
-                ws.append(cells)
+                cell_map = dict(zip(cell_map_keys, cells))
+                row_data = [cell_map.get(key, "") for key in keys]
+                ws.append(row_data)
         wb.save(path)
 
     def _clear(self):
         self._rows_list = []
+        self._result_is_aggregate = False
         self.table.setRowCount(0)
         self.table.setColumnCount(0)
         self.combo_class.setCurrentIndex(0)

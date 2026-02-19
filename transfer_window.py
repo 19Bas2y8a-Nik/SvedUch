@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 
 from db import Database
+from date_widget import DateLineEdit
 
 
 def _row_to_dict(row) -> dict:
@@ -90,8 +91,7 @@ class TransferWindow(QWidget):
         # Дата, причина, тип перевода
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("Дата перевода:"))
-        self.pupil_date = QLineEdit()
-        self.pupil_date.setPlaceholderText("дд.мм.гггг")
+        self.pupil_date = DateLineEdit()
         row2.addWidget(self.pupil_date)
         row2.addWidget(QLabel("Причина перевода:"))
         self.pupil_reason = QLineEdit()
@@ -149,8 +149,7 @@ class TransferWindow(QWidget):
 
         class_row2 = QHBoxLayout()
         class_row2.addWidget(QLabel("Дата перевода:"))
-        self.class_date = QLineEdit()
-        self.class_date.setPlaceholderText("дд.мм.гггг")
+        self.class_date = DateLineEdit()
         class_row2.addWidget(self.class_date)
         class_row2.addWidget(QLabel("Причина перевода:"))
         self.class_reason = QLineEdit()
