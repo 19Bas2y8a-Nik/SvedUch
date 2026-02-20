@@ -4,6 +4,7 @@ SvedUch — учёт сведений об учениках школы.
 и сохраняются в БД при закрытии (этап 7).
 """
 import sys
+import logging
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
@@ -12,6 +13,7 @@ from PyQt5.QtCore import QByteArray, Qt
 from PyQt5.QtGui import QIcon, QFont
 import os
 
+from version import __version__
 from db import Database, DEFAULT_DB_PATH
 from table_windows import TablesWindow
 from queries_window import QueriesWindow
@@ -27,7 +29,7 @@ def get_icon_path():
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SvedUch")
+        self.setWindowTitle(f"SvedUch {__version__}")
         
         # Установка иконки приложения
         icon_path = get_icon_path()
@@ -254,6 +256,13 @@ def apply_app_theme_and_font(db: Database):
 
 
 def main():
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    logging.info("SvedUch %s", __version__)
+
     app = QApplication(sys.argv)
     
     # Установка иконки приложения глобально

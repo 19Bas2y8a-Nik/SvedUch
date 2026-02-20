@@ -7,5 +7,5 @@ echo Сборка исполняемого файла...
 pyinstaller SvedUch.spec
 
 echo.
-echo Готово! Исполняемый файл находится в папке dist\SvedUch.exe
+echo Готово! Исполняемый файл находится в папке dist\
 pause

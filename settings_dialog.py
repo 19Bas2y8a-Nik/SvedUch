@@ -9,6 +9,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QFont
 
+from version import __version__
 from db import Database
 
 
@@ -128,7 +129,7 @@ class AboutDialog(QDialog):
             "• Формировать выборки по классам и программам\n"
             "• Осуществлять перевод учеников между классами\n"
             "• Экспортировать данные в Excel\n\n"
-            "Версия: 1.0"
+            f"Версия: {__version__}"
         )
         desc_label.setAlignment(Qt.AlignLeft)
         desc_label.setWordWrap(True)
