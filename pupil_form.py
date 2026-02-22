@@ -91,6 +91,20 @@ class PupilEntryWidget(QWidget):
         row1.addWidget(self.birth_date_edit)
         layout.addLayout(row1)
 
+        # Ряд между датой рождения и ПМПК: Домашний адрес, Пол
+        row1b = QHBoxLayout()
+        row1b.addWidget(QLabel("Домашний адрес:"))
+        self.address_edit = QLineEdit()
+        self.address_edit.setMaxLength(50)
+        self.address_edit.setPlaceholderText("до 50 символов")
+        row1b.addWidget(self.address_edit)
+        row1b.addWidget(QLabel("Пол:"))
+        self.gender_edit = QLineEdit()
+        self.gender_edit.setMaxLength(4)
+        self.gender_edit.setPlaceholderText("до 4 символов")
+        row1b.addWidget(self.gender_edit)
+        layout.addLayout(row1b)
+
         # 2-й ряд: Дата заключения ПМПК, Номер заключения ПМПК, Номер приказа, Дата приказа
         row2 = QHBoxLayout()
         row2.addWidget(QLabel("Дата заключения ПМПК:"))
@@ -155,6 +169,7 @@ class PupilEntryWidget(QWidget):
         layout.addWidget(grp)
 
         for edit in [self.surname_edit, self.name_edit, self.patronymic_edit, self.birth_date_edit,
+                     self.address_edit, self.gender_edit,
                      self.pmpk_date_edit, self.pmpk_number_edit, self.order_number_edit, self.order_date_edit]:
             edit.textChanged.connect(self._emit_changed)
 
@@ -222,6 +237,8 @@ class PupilEntryWidget(QWidget):
             "name": self.name_edit.text().strip(),
             "patronymic": self.patronymic_edit.text().strip(),
             "birth_date": self.birth_date_edit.text().strip(),
+            "address": self.address_edit.text().strip(),
+            "gender": self.gender_edit.text().strip(),
             "pmpk_date": self.pmpk_date_edit.text().strip(),
             "pmpk_number": self.pmpk_number_edit.text().strip(),
             "program_id": self._program_id,
@@ -243,6 +260,8 @@ class PupilEntryWidget(QWidget):
         self.name_edit.clear()
         self.patronymic_edit.clear()
         self.birth_date_edit.clear()
+        self.address_edit.clear()
+        self.gender_edit.clear()
         self.pmpk_date_edit.clear()
         self.pmpk_number_edit.clear()
         self.program_edit.clear()
@@ -263,6 +282,8 @@ class PupilEntryWidget(QWidget):
         self.name_edit.setText(row["name"] or "")
         self.patronymic_edit.setText(row["patronymic"] or "")
         self.birth_date_edit.setText(row["birth_date"] or "")
+        self.address_edit.setText((row["address"] if "address" in row.keys() else "") or "")
+        self.gender_edit.setText((row["gender"] if "gender" in row.keys() else "") or "")
         self.pmpk_date_edit.setText(row["pmpk_date"] or "")
         self.pmpk_number_edit.setText(row["pmpk_number"] or "")
         self._program_id = row["program_id"]
@@ -309,8 +330,8 @@ class PupilEntryTab(QWidget):
         layout.addWidget(QLabel("Текущая запись (временная таблица):"))
         self.temp_table = QTableWidget()
         self._temp_headers = [
-            "Класс", "Фамилия", "Имя", "Отчество", "Дата рожд.", "ПМПК дата", "ПМПК №",
-            "Программа", "Версия", "Приказ №", "Дата приказа", "Рек.1", "Рек.2", "Рек.3", "Рек.4", "Рек.5"
+            "Класс", "Фамилия", "Имя", "Отчество", "Дата рожд.", "Дом.адр.", "Пол",
+            "ПМПК дата", "ПМПК №", "Программа", "Версия", "Приказ №", "Дата приказа", "Рек.1", "Рек.2", "Рек.3", "Рек.4", "Рек.5"
         ]
         self.temp_table.setColumnCount(len(self._temp_headers))
         self.temp_table.setHorizontalHeaderLabels(self._temp_headers)
@@ -333,6 +354,7 @@ class PupilEntryTab(QWidget):
         prog = programs.get(row["program_id"], ("", "")) if row["program_id"] else ("", "")
         cells = [
             form_num, row["surname"], row["name"], row["patronymic"], row.get("birth_date", ""),
+            row.get("address", ""), row.get("gender", ""),
             row.get("pmpk_date", ""), row.get("pmpk_number", ""), prog[0], prog[1],
             row.get("order_number", ""), row.get("order_date", ""),
             row.get("rec_spec_1", "нет"), row.get("rec_spec_2", "нет"), row.get("rec_spec_3", "нет"),
@@ -412,8 +434,8 @@ class EditPupilTab(QWidget):
         layout.addWidget(QLabel("Текущая запись (временная таблица):"))
         self.temp_table = QTableWidget()
         self._temp_headers = [
-            "Класс", "Фамилия", "Имя", "Отчество", "Дата рожд.", "ПМПК дата", "ПМПК №",
-            "Программа", "Версия", "Приказ №", "Дата приказа", "Рек.1", "Рек.2", "Рек.3", "Рек.4", "Рек.5"
+            "Класс", "Фамилия", "Имя", "Отчество", "Дата рожд.", "Дом.адр.", "Пол",
+            "ПМПК дата", "ПМПК №", "Программа", "Версия", "Приказ №", "Дата приказа", "Рек.1", "Рек.2", "Рек.3", "Рек.4", "Рек.5"
         ]
         self.temp_table.setColumnCount(len(self._temp_headers))
         self.temp_table.setHorizontalHeaderLabels(self._temp_headers)
@@ -519,6 +541,7 @@ class EditPupilTab(QWidget):
         prog = programs.get(row["program_id"], ("", "")) if row["program_id"] else ("", "")
         cells = [
             form_num, row["surname"], row["name"], row["patronymic"], row.get("birth_date", ""),
+            row.get("address", ""), row.get("gender", ""),
             row.get("pmpk_date", ""), row.get("pmpk_number", ""), prog[0], prog[1],
             row.get("order_number", ""), row.get("order_date", ""),
             row.get("rec_spec_1", "нет"), row.get("rec_spec_2", "нет"), row.get("rec_spec_3", "нет"),

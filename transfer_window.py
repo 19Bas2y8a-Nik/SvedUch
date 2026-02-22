@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
+from app_icon import get_icon_path
 from db import Database
 from date_widget import DateLineEdit
 
@@ -48,7 +49,7 @@ class TransferWindow(QWidget):
         self.db = db
         self.setWindowTitle("Перевод")
         # Установка иконки
-        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        icon_path = get_icon_path()
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         self._pupil_rows = []   # результат поиска учеников (блок 1)

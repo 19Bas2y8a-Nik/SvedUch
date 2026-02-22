@@ -10,6 +10,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QFont
 
 from version import __version__
+from app_icon import get_icon_path
 from db import Database
 
 
@@ -23,7 +24,7 @@ class SettingsDialog(QDialog):
         self.setModal(True)
         
         # Установка иконки
-        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        icon_path = get_icon_path()
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         
@@ -105,7 +106,7 @@ class AboutDialog(QDialog):
         self.setModal(True)
         
         # Установка иконки
-        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        icon_path = get_icon_path()
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         

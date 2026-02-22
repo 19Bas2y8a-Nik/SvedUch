@@ -63,6 +63,8 @@ class Database:
                 name TEXT NOT NULL,
                 patronymic TEXT,
                 birth_date TEXT,
+                address TEXT,
+                gender TEXT,
                 pmpk_date TEXT,
                 pmpk_number TEXT,
                 program_id INTEGER REFERENCES programs(id),
@@ -84,6 +86,8 @@ class Database:
                 name TEXT NOT NULL,
                 patronymic TEXT,
                 birth_date TEXT,
+                address TEXT,
+                gender TEXT,
                 pmpk_date TEXT,
                 pmpk_number TEXT,
                 program_id INTEGER,
@@ -98,6 +102,19 @@ class Database:
                 transfer_reason TEXT
             );
         """)
+        conn.commit()
+        self._migrate_pupils_address_gender()
+
+    def _migrate_pupils_address_gender(self) -> None:
+        """Добавить поля address и gender в pupils и pupils_history, если их ещё нет (миграция)."""
+        conn = self._get_conn()
+        for table in ("pupils", "pupils_history"):
+            info = conn.execute(f"PRAGMA table_info({table})").fetchall()
+            names = [row[1] for row in info]
+            if "address" not in names:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN address TEXT")
+            if "gender" not in names:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN gender TEXT")
         conn.commit()
 
     # --- forms ---
@@ -202,20 +219,22 @@ class Database:
 
     # --- pupils ---
     def pupils_insert(self, row: dict[str, Any]) -> int:
-        """Вставить ученика. row: form_id, surname, name, patronymic, birth_date, pmpk_date, pmpk_number, program_id, order_number, order_date, rec_spec_1..5. Возвращает id."""
+        """Вставить ученика. row: form_id, surname, name, patronymic, birth_date, address, gender, pmpk_date, pmpk_number, program_id, order_number, order_date, rec_spec_1..5. Возвращает id."""
         conn = self._get_conn()
         cur = conn.execute(
             """INSERT INTO pupils (
-                form_id, surname, name, patronymic, birth_date,
+                form_id, surname, name, patronymic, birth_date, address, gender,
                 pmpk_date, pmpk_number, program_id, order_number, order_date,
                 rec_spec_1, rec_spec_2, rec_spec_3, rec_spec_4, rec_spec_5
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 row["form_id"],
                 row["surname"],
                 row["name"],
                 row.get("patronymic") or "",
                 row.get("birth_date") or "",
+                row.get("address") or "",
+                row.get("gender") or "",
                 row.get("pmpk_date") or "",
                 row.get("pmpk_number") or "",
                 row.get("program_id"),
@@ -236,7 +255,7 @@ class Database:
         conn = self._get_conn()
         conn.execute(
             """UPDATE pupils SET
-                form_id = ?, surname = ?, name = ?, patronymic = ?, birth_date = ?,
+                form_id = ?, surname = ?, name = ?, patronymic = ?, birth_date = ?, address = ?, gender = ?,
                 pmpk_date = ?, pmpk_number = ?, program_id = ?, order_number = ?, order_date = ?,
                 rec_spec_1 = ?, rec_spec_2 = ?, rec_spec_3 = ?, rec_spec_4 = ?, rec_spec_5 = ?
             WHERE id = ?""",
@@ -246,6 +265,8 @@ class Database:
                 row["name"],
                 row.get("patronymic") or "",
                 row.get("birth_date") or "",
+                row.get("address") or "",
+                row.get("gender") or "",
                 row.get("pmpk_date") or "",
                 row.get("pmpk_number") or "",
                 row.get("program_id"),
@@ -308,17 +329,19 @@ class Database:
         conn = self._get_conn()
         cur = conn.execute(
             """INSERT INTO pupils_history (
-                form_id, surname, name, patronymic, birth_date,
+                form_id, surname, name, patronymic, birth_date, address, gender,
                 pmpk_date, pmpk_number, program_id, order_number, order_date,
                 rec_spec_1, rec_spec_2, rec_spec_3, rec_spec_4, rec_spec_5,
                 transfer_date, transfer_reason
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 row["form_id"],
                 row["surname"],
                 row["name"],
                 row.get("patronymic") or "",
                 row.get("birth_date") or "",
+                row.get("address") or "",
+                row.get("gender") or "",
                 row.get("pmpk_date") or "",
                 row.get("pmpk_number") or "",
                 row.get("program_id"),

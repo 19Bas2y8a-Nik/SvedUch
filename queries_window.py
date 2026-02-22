@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
+from app_icon import get_icon_path
 from db import Database
 
 # Все колонки для режима «Список учеников» (ключ, заголовок)
@@ -21,6 +22,8 @@ PUPIL_COLUMNS = [
     ("name", "Имя"),
     ("patronymic", "Отчество"),
     ("birth_date", "Дата рожд."),
+    ("address", "Дом.адр."),
+    ("gender", "Пол"),
     ("pmpk_date", "ПМПК дата"),
     ("pmpk_number", "ПМПК №"),
     ("program_name", "Программа"),
@@ -41,7 +44,7 @@ class QueriesWindow(QWidget):
         self.db = db
         self.setWindowTitle("Выборки")
         # Установка иконки
-        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        icon_path = get_icon_path()
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         self._rows_list = []   # текущие строки (список dict/Row) для экспорта
@@ -201,6 +204,8 @@ class QueriesWindow(QWidget):
             "name": r["name"] or "",
             "patronymic": r["patronymic"] or "",
             "birth_date": r["birth_date"] or "",
+            "address": (r["address"] if "address" in r.keys() else "") or "",
+            "gender": (r["gender"] if "gender" in r.keys() else "") or "",
             "pmpk_date": r["pmpk_date"] or "",
             "pmpk_number": r["pmpk_number"] or "",
             "program_name": prog[0],

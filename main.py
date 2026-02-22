@@ -14,16 +14,12 @@ from PyQt5.QtGui import QIcon, QFont
 import os
 
 from version import __version__
+from app_icon import get_icon_path
 from db import Database, DEFAULT_DB_PATH
 from table_windows import TablesWindow
 from queries_window import QueriesWindow
 from transfer_window import TransferWindow
 from settings_dialog import SettingsDialog, AboutDialog
-
-
-def get_icon_path():
-    """Возвращает путь к иконке приложения."""
-    return os.path.join(os.path.dirname(__file__), "app.ico")
 
 
 class MainWindow(QMainWindow):

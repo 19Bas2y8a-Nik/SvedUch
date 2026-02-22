@@ -10,6 +10,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
 
+from app_icon import get_icon_path
 from db import Database
 from pupil_form import PupilEntryTab, EditPupilTab
 
@@ -21,7 +22,7 @@ class TablesWindow(QWidget):
         self.db = db
         self.setWindowTitle("Таблицы")
         # Установка иконки
-        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        icon_path = get_icon_path()
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         layout = QVBoxLayout(self)
@@ -362,7 +363,7 @@ class PupilsWindow(QWidget):
         self.db = db
         self.setWindowTitle("Ученики")
         # Установка иконки
-        icon_path = os.path.join(os.path.dirname(__file__), "app.ico")
+        icon_path = get_icon_path()
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         layout = QVBoxLayout(self)
@@ -434,8 +435,8 @@ class PupilsTableDialog(QWidget):
 
     def _build_columns(self):
         headers = [
-            "id", "Класс", "Фамилия", "Имя", "Отчество", "Дата рожд.", "ПМПК дата", "ПМПК №",
-            "Программа", "Версия", "Приказ №", "Дата приказа",
+            "id", "Класс", "Фамилия", "Имя", "Отчество", "Дата рожд.", "Дом.адр.", "Пол",
+            "ПМПК дата", "ПМПК №", "Программа", "Версия", "Приказ №", "Дата приказа",
             "Рек.1", "Рек.2", "Рек.3", "Рек.4", "Рек.5"
         ]
         self.table.setColumnCount(len(headers))
@@ -467,7 +468,8 @@ class PupilsTableDialog(QWidget):
             prog_name, prog_ver = prog[0], prog[1]
             cells = [
                 str(r["id"]), form_num, r["surname"] or "", r["name"] or "", r["patronymic"] or "",
-                r["birth_date"] or "", r["pmpk_date"] or "", r["pmpk_number"] or "",
+                r["birth_date"] or "", (r["address"] if "address" in r.keys() else "") or "", (r["gender"] if "gender" in r.keys() else "") or "",
+                r["pmpk_date"] or "", r["pmpk_number"] or "",
                 prog_name, prog_ver, r["order_number"] or "", r["order_date"] or "",
                 (r["rec_spec_1"] or ""), (r["rec_spec_2"] or ""), (r["rec_spec_3"] or ""),
                 (r["rec_spec_4"] or ""), (r["rec_spec_5"] or ""),
@@ -546,7 +548,7 @@ class ArchiveTableDialog(QWidget):
         layout = QVBoxLayout(self)
         self.table = QTableWidget()
         headers = [
-            "id", "Класс", "Фамилия", "Имя", "Отчество", "Дата перевода", "Причина перевода"
+            "id", "Класс", "Фамилия", "Имя", "Отчество", "Дом.адр.", "Пол", "Дата перевода", "Причина перевода"
         ]
         self.table.setColumnCount(len(headers))
         self.table.setHorizontalHeaderLabels(headers)
@@ -566,6 +568,7 @@ class ArchiveTableDialog(QWidget):
             form_num = forms.get(r["form_id"], str(r["form_id"]))
             cells = [
                 str(r["id"]), form_num, r["surname"] or "", r["name"] or "", r["patronymic"] or "",
+                (r["address"] if "address" in r.keys() else "") or "", (r["gender"] if "gender" in r.keys() else "") or "",
                 r["transfer_date"] or "", r["transfer_reason"] or "",
             ]
             for j, val in enumerate(cells):
