@@ -144,6 +144,18 @@ class Database:
         self._get_conn().execute("DELETE FROM forms WHERE id = ?", (id,))
         self._get_conn().commit()
 
+    def forms_get_or_create_id(self, number: str) -> int:
+        """Получить id класса по номеру; если такого нет — создать и вернуть id."""
+        number = number.strip()
+        if not number:
+            raise ValueError("Номер класса не указан.")
+        row = self._get_conn().execute(
+            "SELECT id FROM forms WHERE number = ?", (number,)
+        ).fetchone()
+        if row is not None:
+            return row["id"]
+        return self.forms_add(number)
+
     # --- programs ---
     def programs_get_all(self) -> list[sqlite3.Row]:
         """Список всех программ."""

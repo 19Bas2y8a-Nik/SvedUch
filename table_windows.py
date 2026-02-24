@@ -2,10 +2,11 @@
 Окно «Таблицы» и диалоги для работы с таблицами БД (этап 3).
 """
 import os
+from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
     QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QMessageBox, QHeaderView,
-    QLabel, QAbstractItemView, QTabWidget,
+    QLabel, QAbstractItemView, QTabWidget, QFileDialog,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -72,6 +73,99 @@ class TablesWindow(QWidget):
 def _row_to_dict(row) -> dict:
     """sqlite3.Row -> dict."""
     return {k: row[k] for k in row.keys()}
+
+
+# Ожидаемые графы для загрузки из Excel (п. 9 PROJECT.md)
+EXCEL_LOAD_COLUMNS = ["Фамилия", "Имя", "Отчество", "Дата рождения", "Домашний адрес", "Пол"]
+
+
+def _read_pupils_from_excel(path: str) -> tuple[list[dict], list[str]]:
+    """
+    Читает из файла Excel таблицу с графами Фамилия, Имя, Отчество, Дата рождения, Домашний адрес, Пол.
+    Возвращает (список словарей с ключами surname, name, patronymic, birth_date, address, gender;
+                 список сообщений об ошибках по строкам).
+    При ошибке формата файла или отсутствии обязательных граф выбрасывает ValueError.
+    """
+    import openpyxl
+    from openpyxl.utils.exceptions import InvalidFileException
+
+    try:
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    except InvalidFileException as e:
+        raise ValueError(f"Неверный формат файла или файл не Excel: {e}")
+    except Exception as e:
+        raise ValueError(f"Ошибка открытия файла: {e}")
+
+    try:
+        ws = wb.active
+        if ws is None:
+            raise ValueError("В книге нет активного листа.")
+        rows = list(ws.iter_rows(values_only=True))
+    finally:
+        wb.close()
+
+    if not rows:
+        raise ValueError("Файл не содержит данных.")
+
+    header_row = [str(c).strip() if c is not None else "" for c in rows[0]]
+    col_index = {}
+    missing = []
+    for col_name in EXCEL_LOAD_COLUMNS:
+        try:
+            idx = header_row.index(col_name)
+            col_index[col_name] = idx
+        except ValueError:
+            missing.append(col_name)
+    if missing:
+        raise ValueError(
+            f"В файле отсутствуют обязательные графы: {', '.join(missing)}. "
+            f"Ожидаются: {', '.join(EXCEL_LOAD_COLUMNS)}."
+        )
+
+    def _cell(row, col_name):
+        idx = col_index[col_name]
+        if idx >= len(row):
+            return ""
+        v = row[idx]
+        if v is None:
+            return ""
+        return str(v).strip()
+
+    def _normalize_date(val: str):
+        if not val:
+            return ""
+        # Excel иногда отдаёт число (дни с 1900-01-01)
+        try:
+            n = float(val)
+            # Excel: число дней от 1899-12-30
+            if 1000 < n < 100000:
+                d = datetime(1899, 12, 30) + timedelta(days=int(n))
+                return d.strftime("%Y-%m-%d")
+        except (ValueError, TypeError):
+            pass
+        # уже строка — оставить как есть (БД хранит TEXT)
+        return val
+
+    result = []
+    errors = []
+    for i, row in enumerate(rows[1:], start=2):
+        row = list(row) if row else []
+        surname = _cell(row, "Фамилия")
+        name = _cell(row, "Имя")
+        if not surname and not name and not _cell(row, "Отчество"):
+            continue
+        if not surname or not name:
+            errors.append(f"Строка {i}: не заполнены Фамилия или Имя.")
+            continue
+        result.append({
+            "surname": surname,
+            "name": name,
+            "patronymic": _cell(row, "Отчество"),
+            "birth_date": _normalize_date(_cell(row, "Дата рождения")),
+            "address": _cell(row, "Домашний адрес"),
+            "gender": _cell(row, "Пол"),
+        })
+    return result, errors
 
 
 # --- Справочник: Классы ---
@@ -397,6 +491,27 @@ class PupilsTableDialog(QWidget):
         self._current_page = 0
         self.setWindowTitle("Ученики")
         layout = QVBoxLayout(self)
+
+        # Загрузка из Excel (п. 9 PROJECT.md)
+        load_layout = QHBoxLayout()
+        load_layout.addWidget(QLabel("Класс:"))
+        self.excel_class_edit = QLineEdit()
+        self.excel_class_edit.setPlaceholderText("Например: 5А")
+        self.excel_class_edit.setMaximumWidth(80)
+        load_layout.addWidget(self.excel_class_edit)
+        load_layout.addWidget(QLabel("Файл:"))
+        self.excel_file_edit = QLineEdit()
+        self.excel_file_edit.setReadOnly(True)
+        self.excel_file_edit.setPlaceholderText("Выберите файл Excel (.xlsx)")
+        load_layout.addWidget(self.excel_file_edit, 1)
+        btn_browse = QPushButton("Обзор…")
+        btn_browse.clicked.connect(self._excel_browse)
+        load_layout.addWidget(btn_browse)
+        btn_load = QPushButton("Загрузить")
+        btn_load.clicked.connect(self._excel_load)
+        load_layout.addWidget(btn_load)
+        layout.addLayout(load_layout)
+
         self.table = QTableWidget()
         self._build_columns()
         layout.addWidget(self.table)
@@ -451,6 +566,82 @@ class PupilsTableDialog(QWidget):
         self._all_rows = list(self.db.pupils_get_all())
         self._current_page = 0
         self._fill_page(forms, programs)
+
+    def _excel_browse(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Выберите файл Excel",
+            "",
+            "Файлы Excel (*.xlsx);;Все файлы (*)",
+        )
+        if path:
+            self.excel_file_edit.setText(path)
+
+    def _excel_load(self):
+        class_number = self.excel_class_edit.text().strip()
+        file_path = self.excel_file_edit.text().strip()
+        if not class_number:
+            QMessageBox.warning(self, "Загрузка из Excel", "Укажите номер класса.")
+            return
+        if not file_path or not os.path.isfile(file_path):
+            QMessageBox.warning(self, "Загрузка из Excel", "Выберите существующий файл Excel.")
+            return
+        try:
+            rows, parse_errors = _read_pupils_from_excel(file_path)
+        except ValueError as e:
+            QMessageBox.critical(self, "Ошибка загрузки", str(e))
+            return
+        if not rows:
+            if parse_errors:
+                QMessageBox.warning(
+                    self, "Загрузка из Excel",
+                    "Нет строк для загрузки.\n" + "\n".join(parse_errors[:15]),
+                )
+            else:
+                QMessageBox.information(self, "Загрузка из Excel", "В файле нет подходящих строк для загрузки.")
+            return
+        try:
+            form_id = self.db.forms_get_or_create_id(class_number)
+        except ValueError as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+            return
+        inserted = 0
+        insert_errors = []
+        for i, r in enumerate(rows):
+            try:
+                row = {
+                    "form_id": form_id,
+                    "surname": r["surname"],
+                    "name": r["name"],
+                    "patronymic": r.get("patronymic", ""),
+                    "birth_date": r.get("birth_date", ""),
+                    "address": r.get("address", ""),
+                    "gender": r.get("gender", ""),
+                    "pmpk_date": "",
+                    "pmpk_number": "",
+                    "program_id": None,
+                    "order_number": "",
+                    "order_date": "",
+                    "rec_spec_1": "нет",
+                    "rec_spec_2": "нет",
+                    "rec_spec_3": "нет",
+                    "rec_spec_4": "нет",
+                    "rec_spec_5": "нет",
+                }
+                self.db.pupils_insert(row)
+                inserted += 1
+            except Exception as e:
+                insert_errors.append(f"Строка {i + 2}: {e}")
+        self._refresh()
+        msg = f"Загружено записей: {inserted}."
+        all_errors = parse_errors + insert_errors
+        if all_errors:
+            msg += "\nОшибки/предупреждения:\n" + "\n".join(all_errors[:15])
+            if len(all_errors) > 15:
+                msg += f"\n… и ещё {len(all_errors) - 15}."
+            QMessageBox.warning(self, "Загрузка из Excel", msg)
+        else:
+            QMessageBox.information(self, "Загрузка из Excel", msg)
 
     def _fill_page(self, forms=None, programs=None):
         if forms is None:
