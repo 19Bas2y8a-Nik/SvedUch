@@ -35,12 +35,17 @@ Name: "{autodesktop}\SvedUch"; Filename: "{app}\SvedUch-{#AppVersion}.exe"; Task
 [Run]
 Filename: "{app}\SvedUch-{#AppVersion}.exe"; Description: "Запустить SvedUch"; Flags: nowait postinstall skipifsilent
 
+; === Секция Uninstall: удаление программы ===
+; Inno Setup создаёт uninstall.exe автоматически. Пункт «Удалить SvedUch» — в меню Пуск (см. [Icons]).
+
 [UninstallRun]
-; Дополнительные действия при удалении (при необходимости добавьте команды)
-; Пример: Filename: "{app}\SvedUch-{#AppVersion}.exe"; Parameters: "/uninstall"
+; Дополнительные действия перед удалением (при необходимости раскомментируйте)
+; Filename: "{app}\SvedUch-{#AppVersion}.exe"; Parameters: "/uninstall"; RunOnceId: "SvedUchUninstall"
 
 [UninstallDelete]
+; Удалить логи приложения
 Type: files; Name: "{app}\*.log"
+; Удалить папку приложения, если пуста
 Type: dirifempty; Name: "{app}"
 
 [Code]
