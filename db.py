@@ -3,17 +3,31 @@
 Инкапсулирует все операции с БД. Схема — см. DATABASE.md.
 """
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
-# Путь к БД по умолчанию (рядом с проектом)
-DEFAULT_DB_PATH = Path(__file__).resolve().parent / "sveduch.db"
+
+def _default_db_dir() -> Path:
+    """Каталог для БД по умолчанию: рядом с exe при установке, иначе рядом с db.py."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
+
+
+# Путь к БД по умолчанию (рядом с exe при установке, иначе рядом с проектом)
+DEFAULT_DB_PATH = _default_db_dir() / "sveduch.db"
 
 
 class Database:
     def __init__(self, db_path: Optional[str | Path] = None):
         self._path = Path(db_path) if db_path else DEFAULT_DB_PATH
         self._conn: Optional[sqlite3.Connection] = None
+
+    @property
+    def path(self) -> Path:
+        """Путь к файлу БД (для восстановления из копии)."""
+        return self._path
 
     def _get_conn(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -26,6 +40,21 @@ class Database:
         if self._conn is not None:
             self._conn.close()
             self._conn = None
+
+    def backup_to(self, dest_path: str | Path) -> None:
+        """
+        Создаёт резервную копию БД в указанный файл (согласованная копия без закрытия соединения).
+        Сохраняйте копии на другой диск или в облако для защиты от порчи.
+        """
+        dest = Path(dest_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        conn = self._get_conn()
+        dest_conn = sqlite3.connect(dest)
+        try:
+            conn.backup(dest_conn)
+            dest_conn.commit()
+        finally:
+            dest_conn.close()
 
     def create_tables(self) -> None:
         """Создаёт все таблицы при первом запуске."""

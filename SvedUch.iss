@@ -5,9 +5,14 @@
 [Setup]
 AppName=SvedUch
 AppVersion={#AppVersion}
+; Один и тот же AppId для всех версий — установка новой версии обновляет программу, а не удаляет и ставит заново
+AppId={{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}}
 AppPublisher=SvedUch
 DefaultDirName={autopf}\SvedUch
 DefaultGroupName=SvedUch
+; При обновлении использовать ту же папку и ту же группу в меню Пуск
+UsePreviousAppDir=yes
+UsePreviousGroup=yes
 OutputDir=installer_output
 OutputBaseFilename=SvedUch-{#AppVersion}-Setup
 Compression=lzma2/ultra64
@@ -23,6 +28,10 @@ Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Создать значок на рабочем столе"; GroupDescription: "Дополнительно:"; Flags: unchecked
+
+; При обновлении удалить exe предыдущей версии (имя файла содержит версию), затем установить новый
+[InstallDelete]
+Type: files; Name: "{app}\SvedUch-*.exe"
 
 [Files]
 Source: "dist\SvedUch-{#AppVersion}.exe"; DestDir: "{app}"; Flags: ignoreversion

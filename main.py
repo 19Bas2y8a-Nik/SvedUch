@@ -5,13 +5,17 @@ SvedUch — учёт сведений об учениках школы.
 """
 import sys
 import logging
+import shutil
+import sqlite3
+from datetime import datetime
+import os
 
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QFileDialog, QMessageBox,
 )
 from PyQt5.QtCore import QByteArray, Qt
 from PyQt5.QtGui import QIcon, QFont
-import os
 
 from version import __version__
 from app_icon import get_icon_path
@@ -77,6 +81,16 @@ class MainWindow(QMainWindow):
         btn_row.addWidget(btn_transfer)
         layout.addLayout(btn_row)
 
+        # Резервная копия и восстановление БД
+        btn_backup = QPushButton("Резервная копия БД")
+        btn_backup.setToolTip("Сохранить копию базы данных в выбранное место (другой диск, флешка, облако)")
+        btn_backup.clicked.connect(self._backup_database)
+        layout.addWidget(btn_backup)
+        btn_restore = QPushButton("Восстановить из копии")
+        btn_restore.setToolTip("Заменить текущую базу выбранной резервной копией (например, после порчи БД)")
+        btn_restore.clicked.connect(self._restore_database)
+        layout.addWidget(btn_restore)
+
         layout.addStretch()
         
         # Кнопки настроек и информации
@@ -136,7 +150,77 @@ class MainWindow(QMainWindow):
         """Открывает диалог "О программе"."""
         dialog = AboutDialog(self)
         dialog.exec_()
-    
+
+    def _backup_database(self):
+        """Сохраняет резервную копию БД в выбранный пользователем файл."""
+        default_name = "SvedUch_backup_%s.db" % datetime.now().strftime("%Y-%m-%d_%H-%M")
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Резервная копия базы данных",
+            default_name,
+            "База SQLite (*.db);;Все файлы (*)",
+        )
+        if not path:
+            return
+        try:
+            self.db.backup_to(path)
+            QMessageBox.information(
+                self,
+                "Резервная копия",
+                "Копия базы данных сохранена:\n%s\n\nРекомендуется хранить копии на другом диске, флешке или в облаке." % path,
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                "Не удалось создать резервную копию:\n%s" % e,
+            )
+
+    def _restore_database(self):
+        """Восстанавливает БД из выбранной резервной копии; после этого требуется перезапуск приложения."""
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Восстановить базу из резервной копии",
+            "",
+            "База SQLite (*.db);;Все файлы (*)",
+        )
+        if not path:
+            return
+        db_path = self.db.path
+        reply = QMessageBox.question(
+            self,
+            "Восстановление БД",
+            "Текущая база данных будет заменена выбранной копией.\n\n"
+            "Путь к текущей БД:\n%s\n\n"
+            "Копия:\n%s\n\nПродолжить? После восстановления нужно перезапустить программу."
+            % (db_path, path),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            self.db.close()
+            shutil.copy2(path, db_path)
+            QMessageBox.information(
+                self,
+                "Восстановлено",
+                "База данных восстановлена из выбранной копии.\nПерезапустите приложение.",
+            )
+            QApplication.quit()
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка",
+                "Не удалось восстановить базу:\n%s" % e,
+            )
+            # Пытаемся снова подключиться к текущей БД
+            try:
+                self.db = Database(DEFAULT_DB_PATH)
+                self.db.create_tables()
+            except Exception:
+                pass
+
     def closeEvent(self, event):
         try:
             geom = self.saveGeometry().toBase64().data().decode("utf-8")
@@ -251,6 +335,36 @@ def apply_app_theme_and_font(db: Database):
             pass
 
 
+def _try_restore_on_corrupt(app: QApplication) -> bool:
+    """
+    Если БД повреждена при запуске — предлагает выбрать резервную копию и восстановить.
+    Возвращает True, если восстановление выполнено (можно повторить запуск), False — отмена.
+    """
+    path, _ = QFileDialog.getOpenFileName(
+        None,
+        "База данных повреждена — выберите резервную копию для восстановления",
+        "",
+        "База SQLite (*.db);;Все файлы (*)",
+    )
+    if not path:
+        return False
+    try:
+        shutil.copy2(path, DEFAULT_DB_PATH)
+        QMessageBox.information(
+            None,
+            "Восстановлено",
+            "База данных восстановлена из выбранной копии.\nПерезапустите приложение.",
+        )
+        return True
+    except Exception as e:
+        QMessageBox.critical(
+            None,
+            "Ошибка",
+            "Не удалось восстановить базу:\n%s" % e,
+        )
+        return False
+
+
 def main():
     logging.basicConfig(
         level=logging.INFO,
@@ -260,23 +374,48 @@ def main():
     logging.info("SvedUch %s", __version__)
 
     app = QApplication(sys.argv)
-    
+
     # Установка иконки приложения глобально
     icon_path = get_icon_path()
     if os.path.exists(icon_path):
         app.setWindowIcon(QIcon(icon_path))
-    
+
     # Подключение к БД для загрузки настроек темы и шрифта
-    # (MainWindow создаст своё подключение, но нам нужно применить настройки до создания окна)
     temp_db = Database(DEFAULT_DB_PATH)
     try:
         temp_db.create_tables()
-        # Применяем тему и шрифт до создания окна
         apply_app_theme_and_font(temp_db)
-    finally:
+    except (sqlite3.Error, OSError) as e:
         temp_db.close()
-    
-    window = MainWindow()
+        QMessageBox.warning(
+            None,
+            "Ошибка базы данных",
+            "Не удалось открыть базу данных (возможно, файл повреждён):\n%s\n\n"
+            "Выберите резервную копию (.db) для восстановления." % e,
+        )
+        if _try_restore_on_corrupt(app):
+            # Перезапуск: выходим с кодом 0, чтобы лаунчер/пользователь мог перезапустить
+            sys.exit(0)
+        sys.exit(1)
+    finally:
+        try:
+            temp_db.close()
+        except Exception:
+            pass
+
+    try:
+        window = MainWindow()
+    except (sqlite3.Error, OSError) as e:
+        QMessageBox.warning(
+            None,
+            "Ошибка базы данных",
+            "Не удалось открыть базу данных:\n%s\n\n"
+            "Выберите резервную копию (.db) для восстановления." % e,
+        )
+        if _try_restore_on_corrupt(app):
+            sys.exit(0)
+        sys.exit(1)
+
     window.show()
     sys.exit(app.exec_())
 
