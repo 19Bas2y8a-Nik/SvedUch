@@ -131,20 +131,33 @@ def _read_pupils_from_excel(path: str) -> tuple[list[dict], list[str]]:
             return ""
         return str(v).strip()
 
-    def _normalize_date(val: str):
-        if not val:
+    def _normalize_date(val):
+        """Приводит дату к формату дд.мм.гггг. val может быть строкой, числом (Excel) или datetime."""
+        if val is None:
             return ""
-        # Excel иногда отдаёт число (дни с 1900-01-01)
+        # openpyxl data_only может вернуть datetime — сразу в нужный формат
+        if isinstance(val, datetime):
+            return val.strftime("%d.%m.%Y")
+        s = str(val).strip()
+        if not s:
+            return ""
+        # Excel: число дней от 1899-12-30
         try:
-            n = float(val)
-            # Excel: число дней от 1899-12-30
+            n = float(s)
             if 1000 < n < 100000:
                 d = datetime(1899, 12, 30) + timedelta(days=int(n))
-                return d.strftime("%Y-%m-%d")
+                return d.strftime("%d.%m.%Y")
         except (ValueError, TypeError):
             pass
-        # уже строка — оставить как есть (БД хранит TEXT)
-        return val
+        # Строка в формате гггг-мм-дд или гггг-мм-дд чч:мм:сс
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+            try:
+                d = datetime.strptime(s[:19] if len(s) > 10 else s, fmt)
+                return d.strftime("%d.%m.%Y")
+            except ValueError:
+                continue
+        # Уже дд.мм.гггг или другой формат — не трогать
+        return s
 
     result = []
     errors = []
