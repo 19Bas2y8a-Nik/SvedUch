@@ -393,7 +393,7 @@ class RecommendationsTableDialog(QWidget):
         self.table.setSelectionMode(QAbstractItemView.SingleSelection)
         layout.addWidget(self.table)
         btn_layout = QHBoxLayout()
-        for label, slot in [("Добавить", self._add), ("Удалить", self._delete), ("Обновить", self._refresh)]:
+        for label, slot in [("Добавить", self._add), ("Изменить", self._edit), ("Удалить", self._delete), ("Обновить", self._refresh)]:
             b = QPushButton(label)
             if label == "Обновить":
                 b.setToolTip("Обновить данные из базы (не сохраняет введённую информацию)")
@@ -411,10 +411,26 @@ class RecommendationsTableDialog(QWidget):
             self.table.setItem(i, 2, QTableWidgetItem(r["recommendation_name"] or ""))
 
     def _add(self):
-        d = RecommendationEditDialog("", "", self)
+        d = RecommendationEditDialog("", "", self, title="Новая рекомендация")
         if d.exec_() == QDialog.Accepted and d.specialist_name:
             try:
                 self.db.recommendations_add(d.specialist_name, d.recommendation_name)
+                self._refresh()
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _edit(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для изменения.")
+            return
+        id_val = int(self.table.item(row, 0).text())
+        spec = self.table.item(row, 1).text() or ""
+        rec = self.table.item(row, 2).text() or ""
+        d = RecommendationEditDialog(spec, rec, self, title="Изменить рекомендацию")
+        if d.exec_() == QDialog.Accepted and d.specialist_name:
+            try:
+                self.db.recommendations_update(id_val, d.specialist_name, d.recommendation_name)
                 self._refresh()
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", str(e))
@@ -436,9 +452,9 @@ class RecommendationsTableDialog(QWidget):
 
 
 class RecommendationEditDialog(QDialog):
-    def __init__(self, specialist_name: str, recommendation_name: str, parent=None):
+    def __init__(self, specialist_name: str, recommendation_name: str, parent=None, title: str = "Новая рекомендация"):
         super().__init__(parent)
-        self.setWindowTitle("Новая рекомендация")
+        self.setWindowTitle(title)
         layout = QFormLayout(self)
         self.spec_edit = QLineEdit()
         self.spec_edit.setText(specialist_name)

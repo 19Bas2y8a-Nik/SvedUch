@@ -253,6 +253,14 @@ class Database:
             ).fetchone()
             return row["id"] if row else 0
 
+    def recommendations_update(self, id: int, specialist_name: str, recommendation_name: str) -> None:
+        """Изменить рекомендацию по id."""
+        self._get_conn().execute(
+            "UPDATE recommendations SET specialist_name = ?, recommendation_name = ? WHERE id = ?",
+            (specialist_name.strip(), recommendation_name.strip(), id),
+        )
+        self._get_conn().commit()
+
     def recommendations_delete(self, id: int) -> None:
         """Удалить рекомендацию."""
         self._get_conn().execute("DELETE FROM recommendations WHERE id = ?", (id,))
