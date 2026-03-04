@@ -11,8 +11,17 @@ from datetime import datetime
 import os
 
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QFileDialog, QMessageBox,
+    QApplication,
+    QMainWindow,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QLabel,
+    QFileDialog,
+    QMessageBox,
+    QLineEdit,
+    QComboBox,
 )
 from PyQt5.QtCore import QByteArray, Qt
 from PyQt5.QtGui import QIcon, QFont
@@ -24,6 +33,7 @@ from table_windows import TablesWindow
 from queries_window import QueriesWindow
 from transfer_window import TransferWindow
 from settings_dialog import SettingsDialog, AboutDialog
+from monitoring_window import MonitoringWindow
 
 
 class MainWindow(QMainWindow):
@@ -68,6 +78,49 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         layout = QVBoxLayout(central)
 
+        # Верхний блок: наименование программы и учебный год/период
+        program_label = QLabel("SvedUch — мониторинг развития обучающихся")
+        program_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(program_label)
+
+        year_period_layout = QHBoxLayout()
+        year_label = QLabel("Учебный год:")
+        self.school_year_edit = QLineEdit()
+        self.school_year_edit.setPlaceholderText("ГГГГ-ГГГГ")
+        period_label = QLabel("Период:")
+        self.period_combo = QComboBox()
+        self.period_combo.addItems(["I полугодие", "II полугодие"])
+        year_period_layout.addWidget(year_label)
+        year_period_layout.addWidget(self.school_year_edit)
+        year_period_layout.addWidget(period_label)
+        year_period_layout.addWidget(self.period_combo)
+        year_period_layout.addStretch()
+        layout.addLayout(year_period_layout)
+
+        # Загрузка сохранённых значений учебного года и периода
+        saved_year = self.db.settings_get("school_year") or ""
+        saved_period = self.db.settings_get("school_period") or ""
+        self.school_year_edit.setText(saved_year)
+        if saved_period:
+            index = self.period_combo.findText(saved_period)
+            if index >= 0:
+                self.period_combo.setCurrentIndex(index)
+
+        # Обработчики изменения значений
+        self.school_year_edit.editingFinished.connect(self._on_school_year_or_period_changed)
+        self.period_combo.currentIndexChanged.connect(self._on_school_year_or_period_changed)
+
+        # При наличии сохранённых корректных значений сразу гарантируем колонку результата
+        try:
+            if saved_year and saved_period:
+                self.db.analysis_ensure_result_column(saved_year, saved_period)
+        except Exception:
+            # Ошибку можно отобразить при явном изменении пользователем, здесь молча игнорируем
+            pass
+
+        # Отступ перед основными разделами
+        layout.addStretch()
+
         layout.addWidget(QLabel("Выберите раздел:"))
         btn_row = QHBoxLayout()
         btn_tables = QPushButton("Таблицы")
@@ -79,6 +132,9 @@ class MainWindow(QMainWindow):
         btn_transfer = QPushButton("Перевод")
         btn_transfer.clicked.connect(self._open_transfer)
         btn_row.addWidget(btn_transfer)
+        btn_monitoring = QPushButton("Мониторинг")
+        btn_monitoring.clicked.connect(self._open_monitoring)
+        btn_row.addWidget(btn_monitoring)
         layout.addLayout(btn_row)
 
         # Резервная копия и восстановление БД
@@ -113,6 +169,31 @@ class MainWindow(QMainWindow):
         self._tables_window = None
         self._queries_window = None
         self._transfer_window = None
+        self._monitoring_window = None
+
+    def _on_school_year_or_period_changed(self):
+        """Обработчик изменения учебного года или периода."""
+        year = (self.school_year_edit.text() or "").strip()
+        period = self.period_combo.currentText().strip()
+
+        # Сохраняем даже неполные значения, чтобы пользователь не потерял ввод
+        try:
+            self.db.settings_set("school_year", year)
+            self.db.settings_set("school_period", period)
+        except Exception:
+            pass
+
+        if not year or not period:
+            return
+
+        try:
+            self.db.analysis_ensure_result_column(year, period)
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Ошибка обновления таблицы анализа",
+                f"Не удалось подготовить колонку результата для периода.\n\n{e}",
+            )
 
     def _open_tables(self):
         if self._tables_window is None or not self._tables_window.isVisible():
@@ -137,6 +218,14 @@ class MainWindow(QMainWindow):
         self._transfer_window.show()
         self._transfer_window.raise_()
         self._transfer_window.activateWindow()
+
+    def _open_monitoring(self):
+        if self._monitoring_window is None or not self._monitoring_window.isVisible():
+            self._monitoring_window = MonitoringWindow(self.db, self)
+            self._monitoring_window.setWindowFlags(self._monitoring_window.windowFlags() | Qt.Window)
+        self._monitoring_window.show()
+        self._monitoring_window.raise_()
+        self._monitoring_window.activateWindow()
     
     def _open_settings(self):
         """Открывает диалог настроек."""

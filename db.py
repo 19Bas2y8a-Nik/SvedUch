@@ -130,6 +130,34 @@ class Database:
                 transfer_date TEXT NOT NULL,
                 transfer_reason TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS experts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS criterions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE
+            );
+
+            CREATE TABLE IF NOT EXISTS standards (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                code TEXT NOT NULL,
+                UNIQUE(name, code)
+            );
+
+            CREATE TABLE IF NOT EXISTS analysis (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                class_number TEXT NOT NULL,
+                surname TEXT NOT NULL,
+                name TEXT NOT NULL,
+                patronymic TEXT,
+                specialist TEXT NOT NULL,
+                criterion TEXT NOT NULL
+                -- Поля результатов за периоды добавляются динамически (ALTER TABLE)
+            );
         """)
         conn.commit()
         self._migrate_pupils_address_gender()
@@ -145,6 +173,93 @@ class Database:
             if "gender" not in names:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN gender TEXT")
         conn.commit()
+
+    # --- experts ---
+    def experts_get_all(self) -> list[sqlite3.Row]:
+        """Список всех специалистов (experts)."""
+        return self._get_conn().execute(
+            "SELECT id, name FROM experts ORDER BY name"
+        ).fetchall()
+
+    def experts_add(self, name: str) -> int:
+        """Добавить специалиста. Возвращает id."""
+        cur = self._get_conn().execute(
+            "INSERT INTO experts (name) VALUES (?)",
+            (name.strip(),),
+        )
+        self._get_conn().commit()
+        return cur.lastrowid
+
+    def experts_update(self, id: int, name: str) -> None:
+        """Обновить имя специалиста."""
+        self._get_conn().execute(
+            "UPDATE experts SET name = ? WHERE id = ?",
+            (name.strip(), id),
+        )
+        self._get_conn().commit()
+
+    def experts_delete(self, id: int) -> None:
+        """Удалить специалиста."""
+        self._get_conn().execute("DELETE FROM experts WHERE id = ?", (id,))
+        self._get_conn().commit()
+
+    # --- criterions ---
+    def criterions_get_all(self) -> list[sqlite3.Row]:
+        """Список всех критериев (criterions)."""
+        return self._get_conn().execute(
+            "SELECT id, name FROM criterions ORDER BY name"
+        ).fetchall()
+
+    def criterions_add(self, name: str) -> int:
+        """Добавить критерий. Возвращает id."""
+        cur = self._get_conn().execute(
+            "INSERT INTO criterions (name) VALUES (?)",
+            (name.strip(),),
+        )
+        self._get_conn().commit()
+        return cur.lastrowid
+
+    def criterions_update(self, id: int, name: str) -> None:
+        """Обновить критерий."""
+        self._get_conn().execute(
+            "UPDATE criterions SET name = ? WHERE id = ?",
+            (name.strip(), id),
+        )
+        self._get_conn().commit()
+
+    def criterions_delete(self, id: int) -> None:
+        """Удалить критерий."""
+        self._get_conn().execute("DELETE FROM criterions WHERE id = ?", (id,))
+        self._get_conn().commit()
+
+    # --- standards ---
+    def standards_get_all(self) -> list[sqlite3.Row]:
+        """Список всех уровней (standards)."""
+        return self._get_conn().execute(
+            "SELECT id, name, code FROM standards ORDER BY name, code"
+        ).fetchall()
+
+    def standards_add(self, name: str, code: str) -> int:
+        """Добавить уровень. Возвращает id."""
+        cur = self._get_conn().execute(
+            "INSERT INTO standards (name, code) VALUES (?, ?)",
+            (name.strip(), code.strip()),
+        )
+        self._get_conn().commit()
+        return cur.lastrowid
+
+    def standards_update(self, id: int, name: str, code: str) -> None:
+        """Обновить уровень."""
+        self._get_conn().execute(
+            "UPDATE standards SET name = ?, code = ? WHERE id = ?",
+            (name.strip(), code.strip(), id),
+        )
+        self._get_conn().commit()
+
+    def standards_delete(self, id: int) -> None:
+        """Удалить уровень."""
+        self._get_conn().execute("DELETE FROM standards WHERE id = ?", (id,))
+        self._get_conn().commit()
 
     # --- forms ---
     def forms_get_all(self) -> list[sqlite3.Row]:
@@ -435,3 +550,105 @@ class Database:
         return self._get_conn().execute(
             "SELECT key, value FROM settings ORDER BY key"
         ).fetchall()
+
+    # --- analysis (динамические поля результатов) ---
+    def analysis_ensure_result_column(self, school_year: str, period: str) -> str:
+        """
+        Гарантирует наличие колонки результата для заданного учебного года и периода.
+        Возвращает имя колонки (для дальнейших INSERT/UPDATE).
+        """
+        school_year = (school_year or "").strip()
+        period = (period or "").strip()
+        if not school_year or not period:
+            raise ValueError("Учебный год и период должны быть заполнены.")
+
+        # Нормализация периода: "I полугодие" / "II полугодие" → "I" / "II"
+        period_key = period
+        if period.startswith("I"):
+            period_key = "I"
+        elif period.startswith("II"):
+            period_key = "II"
+
+        # Формируем безопасное имя колонки
+        base = f"result_{period_key}_{school_year.replace('-', '_')}"
+        column_name = "".join(ch if (ch.isalnum() or ch == "_") else "_" for ch in base)
+
+        conn = self._get_conn()
+        info = conn.execute("PRAGMA table_info(analysis)").fetchall()
+        names = [row[1] for row in info]
+        if column_name not in names:
+            conn.execute(f"ALTER TABLE analysis ADD COLUMN {column_name} TEXT")
+            conn.commit()
+        return column_name
+
+    def analysis_insert_row(
+        self,
+        class_number: str,
+        surname: str,
+        name: str,
+        patronymic: str,
+        specialist: str,
+        criterion: str,
+        result_column: str,
+        result_value: str,
+    ) -> int:
+        """
+        Вставляет одну запись в таблицу analysis с указанным столбцом результата.
+        result_column должен быть получен из analysis_ensure_result_column.
+        """
+        conn = self._get_conn()
+        sql = (
+            f"INSERT INTO analysis (class_number, surname, name, patronymic, specialist, criterion, {result_column}) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)"
+        )
+        cur = conn.execute(
+            sql,
+            (
+                class_number.strip(),
+                surname.strip(),
+                name.strip(),
+                (patronymic or "").strip(),
+                specialist.strip(),
+                criterion.strip(),
+                (result_value or "").strip(),
+            ),
+        )
+        conn.commit()
+        return cur.lastrowid
+
+    def analysis_get_results_for_pupil(
+        self,
+        class_number: str,
+        surname: str,
+        name: str,
+        patronymic: str,
+        specialist: str,
+    ) -> tuple[list[str], list[sqlite3.Row]]:
+        """
+        Возвращает (список имён колонок результатов, строки) для указанного ученика и специалиста.
+        Колонки результатов — все поля таблицы analysis, начинающиеся с 'result_'.
+        """
+        conn = self._get_conn()
+        info = conn.execute("PRAGMA table_info(analysis)").fetchall()
+        result_cols = [row[1] for row in info if isinstance(row[1], str) and row[1].startswith("result_")]
+        if not result_cols:
+            return [], []
+
+        # Строим SELECT с динамическими колонками
+        cols_sql = ", ".join(result_cols)
+        sql = (
+            f"SELECT criterion, {cols_sql} FROM analysis "
+            "WHERE class_number = ? AND surname = ? AND name = ? AND patronymic = ? AND specialist = ? "
+            "ORDER BY criterion"
+        )
+        rows = conn.execute(
+            sql,
+            (
+                (class_number or "").strip(),
+                (surname or "").strip(),
+                (name or "").strip(),
+                (patronymic or "").strip(),
+                (specialist or "").strip(),
+            ),
+        ).fetchall()
+        return result_cols, rows

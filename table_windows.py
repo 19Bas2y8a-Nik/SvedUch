@@ -4,9 +4,26 @@
 import os
 from datetime import datetime, timedelta
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QTableWidget, QTableWidgetItem,
-    QDialog, QFormLayout, QLineEdit, QDialogButtonBox, QMessageBox, QHeaderView,
-    QLabel, QAbstractItemView, QTabWidget, QFileDialog,
+    QWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
+    QDialog,
+    QFormLayout,
+    QLineEdit,
+    QDialogButtonBox,
+    QMessageBox,
+    QHeaderView,
+    QLabel,
+    QAbstractItemView,
+    QTabWidget,
+    QFileDialog,
+    QListWidget,
+    QListWidgetItem,
+    QComboBox,
+    QGroupBox,
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon
@@ -32,8 +49,12 @@ class TablesWindow(QWidget):
         for title, handler in [
             ("Классы (forms)", self._open_forms),
             ("Программы (programs)", self._open_programs),
+            ("Специалисты (experts)", self._open_experts),
             ("Рекомендации (recommendations)", self._open_recommendations),
+            ("Критерии (criterions)", self._open_criterions),
+            ("Уровни (standards)", self._open_standards),
             ("Ученики (pupils)", self._open_pupils),
+            ("Анализ (analysis)", self._open_analysis),
             ("Архив (pupils_history)", self._open_archive),
             ("Настройки (settings)", self._open_settings),
         ]:
@@ -57,11 +78,23 @@ class TablesWindow(QWidget):
     def _open_programs(self):
         self._open_window(ProgramsTableDialog)
 
+    def _open_experts(self):
+        self._open_window(ExpertsTableDialog)
+
     def _open_recommendations(self):
         self._open_window(RecommendationsTableDialog)
 
+    def _open_criterions(self):
+        self._open_window(CriterionsTableDialog)
+
+    def _open_standards(self):
+        self._open_window(StandardsTableDialog)
+
     def _open_pupils(self):
         self._open_window(PupilsWindow)
+
+    def _open_analysis(self):
+        self._open_window(AnalysisWindow)
 
     def _open_archive(self):
         self._open_window(ArchiveTableDialog)
@@ -377,6 +410,276 @@ class ProgramEditDialog(QDialog):
         return self.version_edit.text().strip()
 
 
+# --- Справочник: Специалисты (experts) ---
+class ExpertsTableDialog(QWidget):
+    def __init__(self, db: Database, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.setWindowTitle("Специалисты")
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["id", "Наименование"])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        layout.addWidget(self.table)
+        btn_layout = QHBoxLayout()
+        for label, slot in [
+            ("Добавить", self._add),
+            ("Изменить", self._edit),
+            ("Удалить", self._delete),
+            ("Обновить", self._refresh),
+        ]:
+            b = QPushButton(label)
+            if label == "Обновить":
+                b.setToolTip("Обновить данные из базы (не сохраняет введённую информацию)")
+            b.clicked.connect(slot)
+            btn_layout.addWidget(b)
+        layout.addLayout(btn_layout)
+        self._refresh()
+
+    def _refresh(self):
+        rows = self.db.experts_get_all()
+        self.table.setRowCount(len(rows))
+        for i, r in enumerate(rows):
+            self.table.setItem(i, 0, QTableWidgetItem(str(r["id"])))
+            self.table.setItem(i, 1, QTableWidgetItem(r["name"] or ""))
+
+    def _add(self):
+        d = _SimpleNameEditDialog("", "Новый специалист", "Наименование специалиста:", self)
+        if d.exec_() == QDialog.Accepted and d.name:
+            try:
+                self.db.experts_add(d.name)
+                self._refresh()
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _edit(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для редактирования.")
+            return
+        id_val = int(self.table.item(row, 0).text())
+        name = self.table.item(row, 1).text()
+        d = _SimpleNameEditDialog(name, "Редактирование специалиста", "Наименование специалиста:", self)
+        if d.exec_() == QDialog.Accepted and d.name:
+            try:
+                self.db.experts_update(id_val, d.name)
+                self._refresh()
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _delete(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для удаления.")
+            return
+        id_val = int(self.table.item(row, 0).text())
+        if QMessageBox.question(
+            self,
+            "Подтверждение",
+            "Удалить этого специалиста?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        try:
+            self.db.experts_delete(id_val)
+            self._refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+
+
+# --- Справочник: Критерии (criterions) ---
+class CriterionsTableDialog(QWidget):
+    def __init__(self, db: Database, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.setWindowTitle("Критерии анализа")
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(2)
+        self.table.setHorizontalHeaderLabels(["id", "Наименование"])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        layout.addWidget(self.table)
+        btn_layout = QHBoxLayout()
+        for label, slot in [
+            ("Добавить", self._add),
+            ("Изменить", self._edit),
+            ("Удалить", self._delete),
+            ("Обновить", self._refresh),
+        ]:
+            b = QPushButton(label)
+            if label == "Обновить":
+                b.setToolTip("Обновить данные из базы (не сохраняет введённую информацию)")
+            b.clicked.connect(slot)
+            btn_layout.addWidget(b)
+        layout.addLayout(btn_layout)
+        self._refresh()
+
+    def _refresh(self):
+        rows = self.db.criterions_get_all()
+        self.table.setRowCount(len(rows))
+        for i, r in enumerate(rows):
+            self.table.setItem(i, 0, QTableWidgetItem(str(r["id"])))
+            self.table.setItem(i, 1, QTableWidgetItem(r["name"] or ""))
+
+    def _add(self):
+        d = _SimpleNameEditDialog("", "Новый критерий", "Наименование критерия:", self)
+        if d.exec_() == QDialog.Accepted and d.name:
+            try:
+                self.db.criterions_add(d.name)
+                self._refresh()
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _edit(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для редактирования.")
+            return
+        id_val = int(self.table.item(row, 0).text())
+        name = self.table.item(row, 1).text()
+        d = _SimpleNameEditDialog(name, "Редактирование критерия", "Наименование критерия:", self)
+        if d.exec_() == QDialog.Accepted and d.name:
+            try:
+                self.db.criterions_update(id_val, d.name)
+                self._refresh()
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _delete(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для удаления.")
+            return
+        id_val = int(self.table.item(row, 0).text())
+        if QMessageBox.question(
+            self,
+            "Подтверждение",
+            "Удалить этот критерий?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        try:
+            self.db.criterions_delete(id_val)
+            self._refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+
+
+# --- Справочник: Уровни (standards) ---
+class StandardsTableDialog(QWidget):
+    def __init__(self, db: Database, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.setWindowTitle("Уровни развития")
+        layout = QVBoxLayout(self)
+        self.table = QTableWidget()
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["id", "Наименование", "Код"])
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setSelectionMode(QAbstractItemView.SingleSelection)
+        layout.addWidget(self.table)
+        btn_layout = QHBoxLayout()
+        for label, slot in [
+            ("Добавить", self._add),
+            ("Изменить", self._edit),
+            ("Удалить", self._delete),
+            ("Обновить", self._refresh),
+        ]:
+            b = QPushButton(label)
+            if label == "Обновить":
+                b.setToolTip("Обновить данные из базы (не сохраняет введённую информацию)")
+            b.clicked.connect(slot)
+            btn_layout.addWidget(b)
+        layout.addLayout(btn_layout)
+        self._refresh()
+
+    def _refresh(self):
+        rows = self.db.standards_get_all()
+        self.table.setRowCount(len(rows))
+        for i, r in enumerate(rows):
+            self.table.setItem(i, 0, QTableWidgetItem(str(r["id"])))
+            self.table.setItem(i, 1, QTableWidgetItem(r["name"] or ""))
+            self.table.setItem(i, 2, QTableWidgetItem(r["code"] or ""))
+
+    def _add(self):
+        d = _StandardEditDialog(None, "", "", self)
+        if d.exec_() == QDialog.Accepted and d.name and d.code:
+            try:
+                self.db.standards_add(d.name, d.code)
+                self._refresh()
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _edit(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для редактирования.")
+            return
+        id_val = int(self.table.item(row, 0).text())
+        name = self.table.item(row, 1).text()
+        code = self.table.item(row, 2).text()
+        d = _StandardEditDialog(id_val, name, code, self)
+        if d.exec_() == QDialog.Accepted and d.name and d.code:
+            try:
+                self.db.standards_update(id_val, d.name, d.code)
+                self._refresh()
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", str(e))
+
+    def _delete(self):
+        row = self.table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Выбор", "Выберите строку для удаления.")
+            return
+        id_val = int(self.table.item(row, 0).text())
+        if QMessageBox.question(
+            self,
+            "Подтверждение",
+            "Удалить этот уровень?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        ) != QMessageBox.Yes:
+            return
+        try:
+            self.db.standards_delete(id_val)
+            self._refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+
+
+class _StandardEditDialog(QDialog):
+    def __init__(self, id_val, name: str, code: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Редактирование уровня" if id_val is not None else "Новый уровень")
+        layout = QFormLayout(self)
+        self.name_edit = QLineEdit()
+        self.name_edit.setText(name)
+        layout.addRow("Наименование:", self.name_edit)
+        self.code_edit = QLineEdit()
+        self.code_edit.setText(code)
+        layout.addRow("Код:", self.code_edit)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        layout.addRow(bb)
+
+    @property
+    def name(self) -> str:
+        return self.name_edit.text().strip()
+
+    @property
+    def code(self) -> str:
+        return self.code_edit.text().strip()
+
+
 # --- Справочник: Рекомендации ---
 class RecommendationsTableDialog(QWidget):
     def __init__(self, db: Database, parent=None):
@@ -476,6 +779,25 @@ class RecommendationEditDialog(QDialog):
     @property
     def recommendation_name(self):
         return self.rec_edit.text().strip()
+
+
+class _SimpleNameEditDialog(QDialog):
+    """Простой диалог редактирования одного текстового поля (name)."""
+    def __init__(self, value: str, title: str, label: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(title)
+        layout = QFormLayout(self)
+        self.name_edit = QLineEdit()
+        self.name_edit.setText(value)
+        layout.addRow(label, self.name_edit)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        layout.addRow(bb)
+
+    @property
+    def name(self) -> str:
+        return self.name_edit.text().strip()
 
 
 # --- Ученики: вкладки «Список» и «Добавить ученика» ---
@@ -842,6 +1164,308 @@ class SettingsDialog(QWidget):
                 self._refresh()
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", str(e))
+
+
+# --- Окно "Анализ" ---
+class PupilSelectDialog(QDialog):
+    """Всплывающее окно выбора ученика по классу."""
+    def __init__(self, db: Database, class_id: int, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self._selected_row = None
+        self.setWindowTitle("Выбор ученика")
+        layout = QVBoxLayout(self)
+        self.list_widget = QListWidget()
+        layout.addWidget(self.list_widget)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(self.accept)
+        bb.rejected.connect(self.reject)
+        layout.addWidget(bb)
+
+        forms = {r["id"]: r["number"] for r in self.db.forms_get_all()}
+        rows = self.db.pupils_get_by_form_id(class_id)
+        for r in rows:
+            form_num = forms.get(r["form_id"], "")
+            text = f"{r['surname']} {r['name']} {r['patronymic'] or ''} ({form_num})"
+            item = QListWidgetItem(text.strip())
+            item.setData(Qt.UserRole, r)
+            self.list_widget.addItem(item)
+
+    def selected_pupil(self):
+        item = self.list_widget.currentItem()
+        if not item:
+            return None
+        return item.data(Qt.UserRole)
+
+
+class AnalysisWindow(QWidget):
+    """Окно 'Анализ' для ввода результатов мониторинга."""
+    def __init__(self, db: Database, parent=None):
+        super().__init__(parent)
+        self.db = db
+        self.setWindowTitle("Анализ развития")
+        # Установка иконки
+        icon_path = get_icon_path()
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
+        self._current_class_id = None
+        self._current_class_number = ""
+        self._current_pupil = None  # sqlite3.Row
+
+        layout = QVBoxLayout(self)
+
+        # Информация о текущем учебном годе и периоде
+        school_year = self.db.settings_get("school_year") or ""
+        school_period = self.db.settings_get("school_period") or ""
+        year_period_label = QLabel(
+            f"Учебный год: {school_year or 'не задан'}; период: {school_period or 'не задан'}"
+        )
+        layout.addWidget(year_period_label)
+
+        # Блок выбора специалиста
+        specialist_layout = QHBoxLayout()
+        specialist_layout.addWidget(QLabel("Специалист:"))
+        self.specialist_combo = QComboBox()
+        self._refresh_specialists()
+        specialist_layout.addWidget(self.specialist_combo)
+        specialist_layout.addStretch()
+        layout.addLayout(specialist_layout)
+
+        # Блок выбора ученика
+        pupil_grp = QGroupBox("Выбор ученика")
+        pupil_layout = QHBoxLayout(pupil_grp)
+        pupil_layout.addWidget(QLabel("Класс:"))
+        self.class_combo = QComboBox()
+        self._refresh_classes()
+        pupil_layout.addWidget(self.class_combo)
+        pupil_layout.addWidget(QLabel("Фамилия:"))
+        self.surname_edit = QLineEdit()
+        self.surname_edit.setReadOnly(True)
+        pupil_layout.addWidget(self.surname_edit)
+        pupil_layout.addWidget(QLabel("Имя:"))
+        self.name_edit = QLineEdit()
+        self.name_edit.setReadOnly(True)
+        pupil_layout.addWidget(self.name_edit)
+        pupil_layout.addWidget(QLabel("Отчество:"))
+        self.patronymic_edit = QLineEdit()
+        self.patronymic_edit.setReadOnly(True)
+        pupil_layout.addWidget(self.patronymic_edit)
+        btn_find = QPushButton("Найти")
+        btn_find.clicked.connect(self._on_find_pupil)
+        pupil_layout.addWidget(btn_find)
+        layout.addWidget(pupil_grp)
+
+        # Блок критериев и результатов
+        crit_grp = QGroupBox("Критерии и результаты")
+        crit_layout = QVBoxLayout(crit_grp)
+
+        btn_row = QHBoxLayout()
+        btn_add = QPushButton("Добавить")
+        btn_add.clicked.connect(self._on_add_criterion_from_list)
+        btn_save = QPushButton("Сохранить")
+        btn_save.clicked.connect(self._on_save)
+        btn_clear = QPushButton("Очистить")
+        btn_clear.clicked.connect(self._on_clear_temp)
+        btn_row.addWidget(btn_add)
+        btn_row.addWidget(btn_save)
+        btn_row.addWidget(btn_clear)
+        btn_row.addStretch()
+        crit_layout.addLayout(btn_row)
+
+        row_inputs = QHBoxLayout()
+        row_inputs.addWidget(QLabel("Критерий:"))
+        self.criterion_edit = QLineEdit()
+        row_inputs.addWidget(self.criterion_edit)
+        row_inputs.addWidget(QLabel("Результат:"))
+        self.result_edit = QLineEdit()
+        row_inputs.addWidget(self.result_edit)
+        btn_transfer = QPushButton("Перенести")
+        btn_transfer.clicked.connect(self._on_transfer_to_temp)
+        row_inputs.addWidget(btn_transfer)
+        crit_layout.addLayout(row_inputs)
+
+        self.temp_table = QTableWidget()
+        self.temp_table.setColumnCount(2)
+        self.temp_table.setHorizontalHeaderLabels(["Критерий", "Результат"])
+        self.temp_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.temp_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        crit_layout.addWidget(self.temp_table)
+
+        layout.addWidget(crit_grp)
+        self.setMinimumSize(800, 500)
+
+    def _refresh_specialists(self):
+        self.specialist_combo.clear()
+        rows = self.db.experts_get_all()
+        for r in rows:
+            self.specialist_combo.addItem(r["name"] or "", r["id"])
+
+    def _refresh_classes(self):
+        self.class_combo.clear()
+        forms = self.db.forms_get_all()
+        for r in forms:
+            self.class_combo.addItem(r["number"], r["id"])
+
+    def _on_find_pupil(self):
+        class_id = self.class_combo.currentData()
+        if class_id is None:
+            QMessageBox.information(self, "Класс", "Сначала добавьте и выберите класс.")
+            return
+        dlg = PupilSelectDialog(self.db, class_id, self)
+        if dlg.exec_() != QDialog.Accepted:
+            return
+        pupil = dlg.selected_pupil()
+        if not pupil:
+            return
+        self._current_class_id = pupil["form_id"]
+        forms = {r["id"]: r["number"] for r in self.db.forms_get_all()}
+        self._current_class_number = forms.get(self._current_class_id, "")
+        self._current_pupil = pupil
+        self.surname_edit.setText(pupil["surname"] or "")
+        self.name_edit.setText(pupil["name"] or "")
+        self.patronymic_edit.setText(pupil["patronymic"] or "")
+
+    def _on_add_criterion_from_list(self):
+        """Открыть список критериев и подставить выбранный в поле 'Критерий'."""
+        rows = self.db.criterions_get_all()
+        if not rows:
+            QMessageBox.information(
+                self,
+                "Критерии",
+                "Сначала добавьте критерии в разделе «Таблицы» → «Критерии».",
+            )
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Выбор критерия")
+        v = QVBoxLayout(dlg)
+        lw = QListWidget()
+        for r in rows:
+            item = QListWidgetItem(r["name"] or "")
+            item.setData(Qt.UserRole, r["name"] or "")
+            lw.addItem(item)
+        v.addWidget(lw)
+        bb = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        bb.accepted.connect(dlg.accept)
+        bb.rejected.connect(dlg.reject)
+        v.addWidget(bb)
+        if dlg.exec_() == QDialog.Accepted:
+            item = lw.currentItem()
+            if item:
+                self.criterion_edit.setText(item.data(Qt.UserRole))
+
+    def _on_transfer_to_temp(self):
+        crit = self.criterion_edit.text().strip()
+        res = self.result_edit.text().strip()
+        if not crit:
+            QMessageBox.information(self, "Критерий", "Укажите критерий.")
+            return
+        if not res:
+            QMessageBox.information(self, "Результат", "Укажите результат.")
+            return
+        row_idx = self.temp_table.rowCount()
+        self.temp_table.insertRow(row_idx)
+        self.temp_table.setItem(row_idx, 0, QTableWidgetItem(crit))
+        self.temp_table.setItem(row_idx, 1, QTableWidgetItem(res))
+        self.criterion_edit.clear()
+        self.result_edit.clear()
+
+    def _on_clear_temp(self):
+        """Очистить временную таблицу и все поля ввода во вкладке анализа."""
+        # Временная таблица и поля критерий/результат
+        self.temp_table.setRowCount(0)
+        self.criterion_edit.clear()
+        self.result_edit.clear()
+
+        # Выбор специалиста
+        if self.specialist_combo.count() > 0:
+            self.specialist_combo.setCurrentIndex(0)
+
+        # Выбор класса
+        if self.class_combo.count() > 0:
+            self.class_combo.setCurrentIndex(0)
+
+        # Поля ФИО ученика
+        self.surname_edit.clear()
+        self.name_edit.clear()
+        self.patronymic_edit.clear()
+
+        # Внутреннее состояние выбранного ученика и класса
+        self._current_class_id = None
+        self._current_class_number = ""
+        self._current_pupil = None
+
+    def _on_save(self):
+        if not self._current_pupil or not self._current_class_number:
+            QMessageBox.warning(self, "Сохранение", "Сначала выберите ученика.")
+            return
+        specialist = self.specialist_combo.currentText().strip()
+        if not specialist:
+            QMessageBox.warning(self, "Сохранение", "Выберите специалиста.")
+            return
+        rows_count = self.temp_table.rowCount()
+        if rows_count == 0:
+            QMessageBox.information(self, "Сохранение", "Нет строк для сохранения.")
+            return
+
+        school_year = self.db.settings_get("school_year") or ""
+        school_period = self.db.settings_get("school_period") or ""
+        if not school_year or not school_period:
+            QMessageBox.warning(
+                self,
+                "Учебный год и период",
+                "Перед сохранением укажите учебный год и период в главном окне.",
+            )
+            return
+
+        try:
+            result_column = self.db.analysis_ensure_result_column(school_year, school_period)
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Ошибка таблицы анализа",
+                f"Не удалось подготовить колонку результата:\n{e}",
+            )
+            return
+
+        errors = []
+        inserted = 0
+        for i in range(rows_count):
+            crit_item = self.temp_table.item(i, 0)
+            res_item = self.temp_table.item(i, 1)
+            crit = crit_item.text().strip() if crit_item else ""
+            res = res_item.text().strip() if res_item else ""
+            if not crit:
+                continue
+            try:
+                self.db.analysis_insert_row(
+                    class_number=self._current_class_number,
+                    surname=self._current_pupil["surname"] or "",
+                    name=self._current_pupil["name"] or "",
+                    patronymic=self._current_pupil["patronymic"] or "",
+                    specialist=specialist,
+                    criterion=crit,
+                    result_column=result_column,
+                    result_value=res,
+                )
+                inserted += 1
+            except Exception as e:
+                errors.append(f"Строка {i + 1}: {e}")
+
+        if inserted:
+            self._on_clear_temp()
+            QMessageBox.information(
+                self,
+                "Сохранено",
+                f"Сохранено записей в таблице анализа: {inserted}."
+                + ("\nОшибки:\n" + "\n".join(errors) if errors else ""),
+            )
+        elif errors:
+            QMessageBox.critical(
+                self,
+                "Ошибка сохранения",
+                "Не удалось сохранить ни одной записи:\n" + "\n".join(errors),
+            )
 
 
 class SettingEditDialog(QDialog):
